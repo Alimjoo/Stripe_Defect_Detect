@@ -55,6 +55,15 @@ jobs:
           if (-not (Test-Path (Join-Path $opencvConfig "OpenCVConfig.cmake"))) {
             throw "OpenCVConfig.cmake was not found in $opencvConfig"
           }
+          $requiredRuntimeDlls = @(
+            (Join-Path $opencvBin "opencv_world4120d.dll"),
+            (Join-Path $opencvBin "opencv_world4120.dll")
+          )
+          foreach ($runtimeDll in $requiredRuntimeDlls) {
+            if (-not (Test-Path $runtimeDll)) {
+              throw "Required OpenCV runtime DLL was not found: $runtimeDll"
+            }
+          }
 
           "OpenCV_DIR=$opencvConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
           "OpenCV_BIN=$opencvBin" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -82,6 +91,10 @@ jobs:
           }
 
           $env:PATH = "$env:OpenCV_BIN;$env:PATH"
+          $detectorDll = Join-Path $PWD "build-windows/Debug/Stripe_Defect_Detect.dll"
+          if (-not (Test-Path $detectorDll)) {
+            throw "Detector runtime DLL was not copied beside the Debug executable"
+          }
           ctest --test-dir build-windows --build-config Debug --output-on-failure
           if ($LASTEXITCODE -ne 0) {
             throw "Debug tests failed with exit code $LASTEXITCODE"
@@ -96,6 +109,10 @@ jobs:
           }
 
           $env:PATH = "$env:OpenCV_BIN;$env:PATH"
+          $detectorDll = Join-Path $PWD "build-windows/Release/Stripe_Defect_Detect.dll"
+          if (-not (Test-Path $detectorDll)) {
+            throw "Detector runtime DLL was not copied beside the Release executable"
+          }
           ctest --test-dir build-windows --build-config Release --output-on-failure
           if ($LASTEXITCODE -ne 0) {
             throw "Release tests failed with exit code $LASTEXITCODE"
