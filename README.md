@@ -71,15 +71,15 @@ attaches the compiled ZIP automatically.
 
 ```text
 Stripe_Defect_Detect-1.0.0-windows-x64/
-├── include/
-│   └── stripe_defect_detect.h
-├── bin/
-│   ├── Debug/Stripe_Defect_Detect.dll
-│   └── Release/Stripe_Defect_Detect.dll
-└── lib/
-    ├── Debug/Stripe_Defect_Detect.lib
-    └── Release/Stripe_Defect_Detect.lib
+├── stripe_defect_detect.h
+├── Stripe_Defect_Detect.dll
+├── Stripe_Defect_Detect.lib
+├── Stripe_Defect_Detectd.dll
+└── Stripe_Defect_Detectd.lib
 ```
+
+Files ending in `d` are the Debug build; files without `d` are the Release
+build.
 
 Applications using this package must provide their own compatible OpenCV 4.12
 headers, import libraries, and runtime DLLs. In particular, the OpenCV runtime

@@ -90,7 +90,7 @@ jobs:
           }
 
           $env:PATH = "$env:OpenCV_BIN;$env:PATH"
-          $detectorDll = Join-Path $PWD "build-windows/Debug/Stripe_Defect_Detect.dll"
+          $detectorDll = Join-Path $PWD "build-windows/Debug/Stripe_Defect_Detectd.dll"
           if (-not (Test-Path $detectorDll)) {
             throw "Detector runtime DLL was not copied beside the Debug executable"
           }
@@ -140,27 +140,18 @@ jobs:
             throw "Release install failed with exit code $LASTEXITCODE"
           }
 
-          $directories = @(
-            (Join-Path $packageRoot "include"),
-            (Join-Path $packageRoot "bin/Debug"),
-            (Join-Path $packageRoot "bin/Release"),
-            (Join-Path $packageRoot "lib/Debug"),
-            (Join-Path $packageRoot "lib/Release")
-          )
-          foreach ($directory in $directories) {
-            New-Item -ItemType Directory -Force -Path $directory | Out-Null
-          }
+          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
 
           Copy-Item (Join-Path $releaseInstall "include/stripe_defect_detect.h") `
-            (Join-Path $packageRoot "include/stripe_defect_detect.h")
-          Copy-Item (Join-Path $debugInstall "bin/Stripe_Defect_Detect.dll") `
-            (Join-Path $packageRoot "bin/Debug/Stripe_Defect_Detect.dll")
+            (Join-Path $packageRoot "stripe_defect_detect.h")
+          Copy-Item (Join-Path $debugInstall "bin/Stripe_Defect_Detectd.dll") `
+            (Join-Path $packageRoot "Stripe_Defect_Detectd.dll")
           Copy-Item (Join-Path $releaseInstall "bin/Stripe_Defect_Detect.dll") `
-            (Join-Path $packageRoot "bin/Release/Stripe_Defect_Detect.dll")
-          Copy-Item (Join-Path $debugInstall "lib/Stripe_Defect_Detect.lib") `
-            (Join-Path $packageRoot "lib/Debug/Stripe_Defect_Detect.lib")
+            (Join-Path $packageRoot "Stripe_Defect_Detect.dll")
+          Copy-Item (Join-Path $debugInstall "lib/Stripe_Defect_Detectd.lib") `
+            (Join-Path $packageRoot "Stripe_Defect_Detectd.lib")
           Copy-Item (Join-Path $releaseInstall "lib/Stripe_Defect_Detect.lib") `
-            (Join-Path $packageRoot "lib/Release/Stripe_Defect_Detect.lib")
+            (Join-Path $packageRoot "Stripe_Defect_Detect.lib")
 
           $unexpectedOpenCvFiles = Get-ChildItem $packageRoot -Recurse -File | `
             Where-Object { $_.Name -match '^opencv.*\.(dll|lib|pdb)$' }
