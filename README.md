@@ -60,3 +60,25 @@ decode used by the original project:
 
 Run `./build/stripe_detector` without arguments to see ROI, mask, threshold,
 period-band, and full-resolution options.
+
+## Windows x64 CI package
+
+The `Build Windows x64 package` GitHub Actions workflow builds the shared
+library with MSVC for both Debug and Release. It uses OpenCV 4.12.0 while
+building and testing, but does not put OpenCV files in the published ZIP.
+
+```text
+Stripe_Defect_Detect-1.0.0-windows-x64/
+├── include/
+│   └── stripe_defect_detect.h
+├── bin/
+│   ├── Debug/Stripe_Defect_Detect.dll
+│   └── Release/Stripe_Defect_Detect.dll
+└── lib/
+    ├── Debug/Stripe_Defect_Detect.lib
+    └── Release/Stripe_Defect_Detect.lib
+```
+
+Applications using this package must provide their own compatible OpenCV 4.12
+headers, import libraries, and runtime DLLs. In particular, the OpenCV runtime
+DLL directory must be available in `PATH` when the application starts.

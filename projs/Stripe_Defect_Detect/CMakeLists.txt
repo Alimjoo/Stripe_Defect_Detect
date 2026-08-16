@@ -29,3 +29,13 @@ set_target_properties(${Proj_Name} PROPERTIES
 target_compile_options(${Proj_Name} PRIVATE
     $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-Wpedantic>
 )
+
+include(GNUInstallDirs)
+install(TARGETS ${Proj_Name}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(FILES headers/stripe_defect_detect.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)

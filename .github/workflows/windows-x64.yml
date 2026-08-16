@@ -1,0 +1,157 @@
+name: Build Windows x64 package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  OPENCV_VERSION: "4.12.0"
+  OPENCV_WINDOWS_SHA256: "b753b14d880b9bc8d89d6acd3b665c040baec0211078435432fcae117db707af"
+  PACKAGE_NAME: "Stripe_Defect_Detect-1.0.0-windows-x64"
+
+jobs:
+  build:
+    name: MSVC x64 Debug and Release
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download OpenCV 4.12.0 for the build
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "opencv-$env:OPENCV_VERSION-windows.exe"
+          $extractRoot = Join-Path $env:RUNNER_TEMP "opencv-$env:OPENCV_VERSION"
+          $url = "https://github.com/opencv/opencv/releases/download/$env:OPENCV_VERSION/opencv-$env:OPENCV_VERSION-windows.exe"
+
+          curl.exe --fail --location --retry 3 $url --output $archive
+          if ($LASTEXITCODE -ne 0) {
+            throw "OpenCV download failed with exit code $LASTEXITCODE"
+          }
+
+          $actualHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $env:OPENCV_WINDOWS_SHA256) {
+            throw "OpenCV archive checksum mismatch: $actualHash"
+          }
+
+          New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
+          & 7z x $archive "-o$extractRoot" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "OpenCV extraction failed with exit code $LASTEXITCODE"
+          }
+
+          $opencvConfig = Join-Path $extractRoot "opencv/build/x64/vc16/lib"
+          $opencvBin = Join-Path $extractRoot "opencv/build/x64/vc16/bin"
+          if (-not (Test-Path (Join-Path $opencvConfig "OpenCVConfig.cmake"))) {
+            throw "OpenCVConfig.cmake was not found in $opencvConfig"
+          }
+
+          "OpenCV_DIR=$opencvConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "OpenCV_BIN=$opencvBin" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $opencvBin | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Configure MSVC x64 shared-library build
+        shell: pwsh
+        run: |
+          cmake -S . -B build-windows `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DBUILD_SHARED_LIBS=ON `
+            -DBUILD_TESTING=ON `
+            "-DOpenCV_DIR=$env:OpenCV_DIR"
+          if ($LASTEXITCODE -ne 0) {
+            throw "CMake configuration failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Build and test Debug
+        shell: pwsh
+        run: |
+          cmake --build build-windows --config Debug --parallel
+          if ($LASTEXITCODE -ne 0) {
+            throw "Debug build failed with exit code $LASTEXITCODE"
+          }
+
+          $env:PATH = "$env:OpenCV_BIN;$env:PATH"
+          ctest --test-dir build-windows --build-config Debug --output-on-failure
+          if ($LASTEXITCODE -ne 0) {
+            throw "Debug tests failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Build and test Release
+        shell: pwsh
+        run: |
+          cmake --build build-windows --config Release --parallel
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release build failed with exit code $LASTEXITCODE"
+          }
+
+          $env:PATH = "$env:OpenCV_BIN;$env:PATH"
+          ctest --test-dir build-windows --build-config Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release tests failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Install and package detector artifacts
+        shell: pwsh
+        run: |
+          $debugInstall = Join-Path $env:RUNNER_TEMP "stripe-defect-debug"
+          $releaseInstall = Join-Path $env:RUNNER_TEMP "stripe-defect-release"
+          $packageRoot = Join-Path $PWD "package/$env:PACKAGE_NAME"
+
+          cmake --install build-windows --config Debug --prefix $debugInstall
+          if ($LASTEXITCODE -ne 0) {
+            throw "Debug install failed with exit code $LASTEXITCODE"
+          }
+          cmake --install build-windows --config Release --prefix $releaseInstall
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release install failed with exit code $LASTEXITCODE"
+          }
+
+          $directories = @(
+            (Join-Path $packageRoot "include"),
+            (Join-Path $packageRoot "bin/Debug"),
+            (Join-Path $packageRoot "bin/Release"),
+            (Join-Path $packageRoot "lib/Debug"),
+            (Join-Path $packageRoot "lib/Release")
+          )
+          foreach ($directory in $directories) {
+            New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          }
+
+          Copy-Item (Join-Path $releaseInstall "include/stripe_defect_detect.h") `
+            (Join-Path $packageRoot "include/stripe_defect_detect.h")
+          Copy-Item (Join-Path $debugInstall "bin/Stripe_Defect_Detect.dll") `
+            (Join-Path $packageRoot "bin/Debug/Stripe_Defect_Detect.dll")
+          Copy-Item (Join-Path $releaseInstall "bin/Stripe_Defect_Detect.dll") `
+            (Join-Path $packageRoot "bin/Release/Stripe_Defect_Detect.dll")
+          Copy-Item (Join-Path $debugInstall "lib/Stripe_Defect_Detect.lib") `
+            (Join-Path $packageRoot "lib/Debug/Stripe_Defect_Detect.lib")
+          Copy-Item (Join-Path $releaseInstall "lib/Stripe_Defect_Detect.lib") `
+            (Join-Path $packageRoot "lib/Release/Stripe_Defect_Detect.lib")
+
+          $unexpectedOpenCvFiles = Get-ChildItem $packageRoot -Recurse -File | `
+            Where-Object { $_.Name -match '^opencv.*\.(dll|lib|pdb)$' }
+          if ($unexpectedOpenCvFiles) {
+            throw "OpenCV binaries must not be included in the detector package"
+          }
+
+          $archivePath = Join-Path $PWD "$env:PACKAGE_NAME.zip"
+          Compress-Archive -Path $packageRoot -DestinationPath $archivePath -Force
+
+      - name: Upload Windows x64 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: ${{ env.PACKAGE_NAME }}.zip
+          if-no-files-found: error
+          retention-days: 14
