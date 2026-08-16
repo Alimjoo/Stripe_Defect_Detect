@@ -11,12 +11,11 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   OPENCV_VERSION: "4.12.0"
   OPENCV_WINDOWS_SHA256: "b753b14d880b9bc8d89d6acd3b665c040baec0211078435432fcae117db707af"
-  PACKAGE_NAME: "Stripe_Defect_Detect-1.0.0-windows-x64"
 
 jobs:
   build:
@@ -119,11 +118,18 @@ jobs:
           }
 
       - name: Install and package detector artifacts
+        id: package
         shell: pwsh
         run: |
           $debugInstall = Join-Path $env:RUNNER_TEMP "stripe-defect-debug"
           $releaseInstall = Join-Path $env:RUNNER_TEMP "stripe-defect-release"
-          $packageRoot = Join-Path $PWD "package/$env:PACKAGE_NAME"
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          } else {
+            $version = "ci-$env:GITHUB_RUN_NUMBER"
+          }
+          $packageName = "Stripe_Defect_Detect-$version-windows-x64"
+          $packageRoot = Join-Path $PWD "package/$packageName"
 
           cmake --install build-windows --config Debug --prefix $debugInstall
           if ($LASTEXITCODE -ne 0) {
@@ -162,13 +168,38 @@ jobs:
             throw "OpenCV binaries must not be included in the detector package"
           }
 
-          $archivePath = Join-Path $PWD "$env:PACKAGE_NAME.zip"
+          $archivePath = Join-Path $PWD "$packageName.zip"
           Compress-Archive -Path $packageRoot -DestinationPath $archivePath -Force
+          "package_name=$packageName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "archive_path=$archivePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Upload Windows x64 package
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PACKAGE_NAME }}
-          path: ${{ env.PACKAGE_NAME }}.zip
+          name: ${{ steps.package.outputs.package_name }}
+          path: ${{ steps.package.outputs.archive_path }}
           if-no-files-found: error
           retention-days: 14
+
+      - name: Attach package to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_ARCHIVE: ${{ steps.package.outputs.archive_path }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $env:PACKAGE_ARCHIVE `
+              --repo $env:GITHUB_REPOSITORY `
+              --clobber
+          } else {
+            gh release create $tag $env:PACKAGE_ARCHIVE `
+              --repo $env:GITHUB_REPOSITORY `
+              --title $tag `
+              --generate-notes
+          }
+          if ($LASTEXITCODE -ne 0) {
+            throw "Publishing GitHub Release $tag failed with exit code $LASTEXITCODE"
+          }

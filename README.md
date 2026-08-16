@@ -65,7 +65,9 @@ period-band, and full-resolution options.
 
 The `Build Windows x64 package` GitHub Actions workflow builds the shared
 library with MSVC for both Debug and Release. It uses OpenCV 4.12.0 while
-building and testing, but does not put OpenCV files in the published ZIP.
+building and testing, but does not put OpenCV files in the published ZIP. A
+tag matching `v*` also creates or updates the corresponding GitHub Release and
+attaches the compiled ZIP automatically.
 
 ```text
 Stripe_Defect_Detect-1.0.0-windows-x64/
